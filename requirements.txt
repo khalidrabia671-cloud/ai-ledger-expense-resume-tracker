@@ -1,0 +1,10 @@
+flask
+werkzeug
+python-dotenv
+pillow
+pytesseract
+PyPDF2
+python-docx
+requests
+google-genai
+gunicorn
