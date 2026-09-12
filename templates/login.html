@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log in — Ledger</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #0E0B21;
+            background-image:
+                radial-gradient(circle at 15% 20%, rgba(124,92,252,0.55), transparent 42%),
+                radial-gradient(circle at 85% 25%, rgba(34,211,238,0.4), transparent 42%),
+                radial-gradient(circle at 50% 100%, rgba(244,114,182,0.35), transparent 45%),
+                linear-gradient(180deg, #120C2E 0%, #0E0B21 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 1.5rem;
+        }
+        .auth-card {
+            background: rgba(255,255,255,0.09);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255,255,255,0.18);
+            border-radius: 20px;
+            padding: 2.75rem;
+            width: 100%;
+            max-width: 380px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+        }
+        h1 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 1.6rem; margin-bottom: 0.3rem; color: #F3F1FF; }
+        .subtitle { color: #B8B4D6; margin-bottom: 1.5rem; font-size: 0.9rem; }
+        label { display: block; font-weight: 600; margin-bottom: 0.4rem; margin-top: 1rem; font-size: 0.83rem; color: #F3F1FF; }
+        input {
+            width: 100%;
+            padding: 0.7rem 0.9rem;
+            border: 1.5px solid rgba(255,255,255,0.18);
+            border-radius: 10px;
+            font-size: 0.95rem;
+            background: rgba(255,255,255,0.07);
+            color: #F3F1FF;
+        }
+        input:focus { outline: none; border-color: #A78BFA; box-shadow: 0 0 0 3px rgba(167,139,250,0.25); }
+        button {
+            width: 100%;
+            background: #7C5CFC;
+            color: white;
+            border: none;
+            padding: 0.8rem;
+            border-radius: 10px;
+            font-size: 0.92rem;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 1.6rem;
+        }
+        button:hover { background: #6A45E8; }
+        .switch-link { text-align: center; margin-top: 1.3rem; font-size: 0.88rem; color: #B8B4D6; }
+        .switch-link a { color: #C4B5FD; text-decoration: none; font-weight: 600; }
+        .error-box {
+            background: rgba(251,113,133,0.12);
+            border: 1px solid rgba(251,113,133,0.35);
+            color: #FECDD3;
+            padding: 0.7rem 0.9rem;
+            border-radius: 10px;
+            margin-top: 1rem;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-card">
+        <h1>Welcome back</h1>
+        <p class="subtitle">Log in to your ledger</p>
+        <form method="POST">
+            <label>Username</label>
+            <input type="text" name="username" required autofocus>
+            <label>Password</label>
+            <input type="password" name="password" required>
+            <button type="submit">Log in</button>
+        </form>
+        {% if error %}<div class="error-box">{{ error }}</div>{% endif %}
+        <p class="switch-link">Don't have an account? <a href="/signup">Sign up</a></p>
+    </div>
+</body>
+</html>

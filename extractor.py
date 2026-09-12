@@ -1,102 +1,33 @@
 """
 Invoice/Receipt Data Extractor - Core Logic
-Day 2: OCR se text nikalna + Gemini se structured data banana
+Updated: Ab Tesseract OCR ki zaroorat nahi - Gemini seedha image dekh kar
+structured data nikalta hai (multimodal AI). Isse deployment simple ho jati hai.
 """
 
 import os
 import json
+import base64
+import time
 from dotenv import load_dotenv
-from PIL import Image, ImageOps, ImageFilter
-import pytesseract
 from PyPDF2 import PdfReader
 from google import genai
+from google.genai import types
 
 # .env file se API key load karo
 load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
-
-def preprocess_image(img):
-    """
-    OCR accuracy behtar karne ke liye image ko clean karta hai:
-    grayscale + resize (bara) + sharpen + contrast.
-    Receipts mein chhoti/tight numbers ke liye ye zaroori hai.
-    """
-    # Grayscale mein convert karo
-    img = img.convert("L")
-
-    # Image ko bara karo (2x) - chhote text ko OCR behtar parhta hai
-    width, height = img.size
-    img = img.resize((width * 2, height * 2), Image.LANCZOS)
-
-    # Halka sharpen karo
-    img = img.filter(ImageFilter.SHARPEN)
-
-    # Auto-contrast lagao taake faint numbers bhi clear hon
-    img = ImageOps.autocontrast(img)
-
-    return img
-
-
-def extract_text_from_image(image_path):
-    """
-    Image (JPG/PNG) se OCR ke zariye text nikalta hai.
-    Pehle image preprocess karta hai taake accuracy behtar ho.
-    """
-    try:
-        img = Image.open(image_path)
-        img = preprocess_image(img)
-
-        # --psm 6: treat image as a single uniform block of text
-        # Ye receipts/invoices ke columns ke liye behtar kaam karta hai
-        custom_config = r"--oem 3 --psm 6"
-        text = pytesseract.image_to_string(img, config=custom_config)
-        return text.strip()
-    except Exception as e:
-        return f"ERROR reading image: {e}"
-
-
-def extract_text_from_pdf(pdf_path):
-    """
-    PDF se text nikalta hai (agar PDF text-based hai, scanned image nahi).
-    """
-    try:
-        reader = PdfReader(pdf_path)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() + "\n"
-        return text.strip()
-    except Exception as e:
-        return f"ERROR reading PDF: {e}"
-
-
-def extract_text(file_path):
-    """
-    File ka type dekh kar sahi extraction function call karta hai.
-    """
-    ext = file_path.lower().split(".")[-1]
-    if ext in ["jpg", "jpeg", "png"]:
-        return extract_text_from_image(file_path)
-    elif ext == "pdf":
-        return extract_text_from_pdf(file_path)
-    else:
-        return f"ERROR: Unsupported file type .{ext}"
-
-
-def get_structured_data(raw_text):
-    """
-    Raw OCR text ko Gemini ko bhejta hai aur structured JSON wapas mangta hai.
-    """
-    prompt = f"""You are an invoice/receipt data extraction assistant.
-Extract the following fields from the text below and return ONLY valid JSON,
-with no extra explanation, no markdown formatting, no ```json fences.
+EXTRACTION_PROMPT = """You are an invoice/receipt data extraction assistant.
+Look at this invoice/receipt and extract the following fields.
+Return ONLY valid JSON, with no extra explanation, no markdown formatting, no ```json fences.
 
 Fields to extract:
 - vendor: the name of the store/company (string)
 - date: the invoice/receipt date (string, keep original format)
 - total: the FINAL amount actually paid (number, no currency symbol)
-- currency: the currency symbol or code if visible (string, e.g. "PKR", "$")
+- currency: the ISO currency CODE (e.g. "USD", "PKR", "EUR", "GBP"), not a symbol.
+  If you see "$" assume "USD" unless context suggests otherwise (e.g. "Rs" or "₨" means "PKR").
 - items: a list of items, each with "name" and "price" (list of objects)
 
 IMPORTANT RULES for "total":
@@ -106,69 +37,151 @@ IMPORTANT RULES for "total":
 - Do not confuse "SUBTOTAL", "CASH", or "CHANGE" with "TOTAL".
 
 If a field cannot be found, use null for that field.
-
-Text to extract from:
----
-{raw_text}
----
-
 Return only the JSON object.
 """
 
-    response = client.models.generate_content(
-        model="gemini-3.6-flash",
-        contents=prompt
-    )
 
-    raw_output = response.text.strip()
-
-    # Kabhi kabhi model ```json fences add kar deta hai, unhe hata dete hain
+def clean_json_response(raw_output):
+    """Gemini kabhi kabhi ```json fences add kar deta hai, unhe hata dete hain."""
+    raw_output = raw_output.strip()
     if raw_output.startswith("```"):
         raw_output = raw_output.split("```")[1]
         if raw_output.startswith("json"):
             raw_output = raw_output[4:]
         raw_output = raw_output.strip()
+    return raw_output
 
+
+def call_gemini_with_retry(contents, max_retries=4):
+    """
+    Gemini ko call karta hai. Agar ek model busy (503) ho, to
+    dusre (halke/faster) model par switch kar ke try karta hai,
+    saath mein thora wait bhi karta hai (exponential backoff).
+    """
+    # In dono models ke beech switch karenge - agar ek busy ho to dusra try karo
+    models_to_try = ["gemini-3.6-flash", "gemini-3.5-flash-lite"]
+
+    for attempt in range(max_retries):
+        model_name = models_to_try[attempt % len(models_to_try)]
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=contents,
+            )
+            return response
+        except Exception as e:
+            error_str = str(e)
+            is_retryable = "503" in error_str or "UNAVAILABLE" in error_str or "overloaded" in error_str.lower()
+
+            if is_retryable and attempt < max_retries - 1:
+                wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
+                print(f"⏳ {model_name} busy hai, {wait_time}s mein dusre model se dobara try kar raha hoon... (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
+            else:
+                raise  # Agar retryable nahi hai, ya sab attempts khatam ho gaye, error aage bhej do
+
+    raise Exception("Gemini se connect nahi ho paya, sab retries fail ho gaye")
+
+
+def get_mime_type(file_path):
+    """File extension se mime type nikalta hai."""
+    ext = file_path.lower().split(".")[-1]
+    mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}
+    return mime_map.get(ext, "image/jpeg")
+
+
+def process_image(image_path):
+    """
+    Image (JPG/PNG) ko seedha Gemini ko bhejta hai - koi separate OCR step nahi.
+    Gemini khud image dekh kar structured data nikalta hai.
+    """
     try:
-        data = json.loads(raw_output)
-        return data
+        with open(image_path, "rb") as f:
+            image_bytes = f.read()
+
+        mime_type = get_mime_type(image_path)
+
+        response = call_gemini_with_retry([
+            types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+            EXTRACTION_PROMPT,
+        ])
+
+        raw_output = clean_json_response(response.text)
+        return json.loads(raw_output)
+
     except json.JSONDecodeError:
-        return {"error": "Gemini se valid JSON nahi mila", "raw_response": raw_output}
+        return {"error": "Gemini se valid JSON nahi mila", "raw_response": response.text}
+    except Exception as e:
+        return {"error": f"Image processing failed: {str(e)}"}
+
+
+def process_pdf(pdf_path):
+    """
+    PDF se text nikal kar (agar text-based PDF hai) Gemini ko bhejta hai.
+    """
+    try:
+        reader = PdfReader(pdf_path)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() + "\n"
+        text = text.strip()
+
+        if len(text) == 0:
+            return {"error": "PDF se koi text nahi mila. Ye scanned/image-based PDF ho sakta hai."}
+
+        response = call_gemini_with_retry(
+            f"{EXTRACTION_PROMPT}\n\nText to extract from:\n---\n{text}\n---"
+        )
+
+        raw_output = clean_json_response(response.text)
+        return json.loads(raw_output)
+
+    except json.JSONDecodeError:
+        return {"error": "Gemini se valid JSON nahi mila", "raw_response": response.text}
+    except Exception as e:
+        return {"error": f"PDF processing failed: {str(e)}"}
 
 
 def process_invoice(file_path):
     """
-    Poora pipeline: file -> OCR text -> structured JSON
+    Poora pipeline: file type dekh kar sahi function call karta hai.
     """
+    ext = file_path.lower().split(".")[-1]
+
     print(f"\n📄 Processing: {file_path}")
 
-    print("Step 1: Text extract ho raha hai (OCR)...")
-    raw_text = extract_text(file_path)
-
-    if raw_text.startswith("ERROR"):
-        print(f"❌ {raw_text}")
-        return None
-
-    print(f"✅ Text mil gaya ({len(raw_text)} characters)")
-    print("\n--- Raw extracted text (preview) ---")
-    print(raw_text[:300] + ("..." if len(raw_text) > 300 else ""))
-
-    print("\nStep 2: Gemini se structured data nikala ja raha hai...")
-    structured = get_structured_data(raw_text)
+    if ext in ["jpg", "jpeg", "png"]:
+        result = process_image(file_path)
+    elif ext == "pdf":
+        result = process_pdf(file_path)
+    else:
+        result = {"error": f"Unsupported file type: .{ext}"}
 
     print("\n✅ RESULT:")
-    print(json.dumps(structured, indent=2, ensure_ascii=False))
+    print(json.dumps(result, indent=2, ensure_ascii=False))
 
-    return structured
+    # Ek readable "items_summary" field bhi add karo, taake Google Sheets
+    # jaisi jagah par ye clean text ki tarah dikhe (JSON ki jagah)
+    if isinstance(result, dict) and "items" in result and isinstance(result["items"], list):
+        currency = result.get("currency") or ""
+        parts = []
+        for item in result["items"]:
+            name = item.get("name", "Unknown")
+            price = item.get("price")
+            if price is not None:
+                parts.append(f"{name} ({currency}{price})")
+            else:
+                parts.append(name)
+        result["items_summary"] = ", ".join(parts)
+
+    return result
 
 
 # ------------- TESTING -------------
 if __name__ == "__main__":
-    # Yahan apni sample invoice/receipt ka path likho
-    test_file = "sample_invoice2.jpg"  # <-- isay apni file ke naam se replace karo
+    test_file = "sample_invoice.jpg"
 
     if os.path.exists(test_file):
         process_invoice(test_file)
     else:
         print(f"❌ File nahi mili: {test_file}")
-        print("Ek sample invoice/receipt image is folder mein 'sample_invoice.jpg' naam se rakho, ya test_file variable update karo.")

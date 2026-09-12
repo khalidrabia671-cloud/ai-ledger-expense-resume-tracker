@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Invoice Extractor{% endblock %}
+{% block content %}
+<a href="/dashboard" class="back-link">← Back to Dashboard</a>
+<div class="card">
+    <h1>Invoice / Receipt Extractor</h1>
+    <p class="subtitle">Upload a receipt or invoice image/PDF to extract structured data.</p>
+
+    <form method="POST" enctype="multipart/form-data" onsubmit="showLoading(this)">
+        <label>Choose a file (JPG, PNG, or PDF)</label>
+        <input type="file" name="file" accept=".jpg,.jpeg,.png,.pdf" required>
+        <button type="submit" id="submitBtn">Extract Data</button>
+    </form>
+</div>
+
+<div id="loadingBox" class="card" style="display:none; text-align:center;">
+    <div class="spinner"></div>
+    <p style="margin-top:1rem; color:var(--text-soft); font-weight:600;">Reading your receipt with AI...</p>
+    <p class="subtitle" style="margin-top:0.3rem;">This usually takes a few seconds.</p>
+</div>
+
+<style>
+.spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--glass-border);
+    border-top-color: var(--violet-solid, #7C5CFC);
+    border-radius: 50%;
+    margin: 0 auto;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+<script>
+function showLoading(form) {
+    document.getElementById('submitBtn').disabled = true;
+    document.getElementById('submitBtn').innerText = 'Processing...';
+    document.getElementById('loadingBox').style.display = 'block';
+    document.getElementById('loadingBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return true; // form ko normally submit hone do
+}
+</script>
+
+{% if error %}
+<div class="error-box">⚠️ {{ error }}</div>
+{% endif %}
+
+{% if data %}
+<div class="card result-card">
+    <h1 style="font-size:1.2rem;">✅ Extraction Result</h1>
+    <div class="field-row"><span class="field-label">Vendor</span><span class="field-value">{{ data.vendor or "—" }}</span></div>
+    <div class="field-row"><span class="field-label">Date</span><span class="field-value">{{ data.date or "—" }}</span></div>
+    <div class="field-row"><span class="field-label">Total</span><span class="field-value">{{ data.currency or "" }}{{ data.total or "—" }}</span></div>
+
+    {% if data['items'] %}
+    <label style="margin-top:1.5rem;">Items</label>
+    <table class="items-table">
+        {% for item in data['items'] %}
+        <tr>
+            <td>{{ item.name }}</td>
+            <td>{{ data.currency or "" }}{{ item.price }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

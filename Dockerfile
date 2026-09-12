@@ -16,11 +16,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Baaki saara code copy karo
 COPY . .
 
-# Uploads folder banao
-RUN mkdir -p uploads
+# Uploads folder banao aur permissions do (Hugging Face Spaces non-root user use karta hai)
+RUN mkdir -p uploads && chmod -R 777 uploads
 
-# Port expose karo
-EXPOSE 5000
+# Hugging Face Spaces port 7860 use karta hai
+EXPOSE 7860
 
 # App ko gunicorn (production server) se chalao
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:7860", "app:app"]

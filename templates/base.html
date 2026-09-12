@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Ledger — AI Expense & Resume Tools{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --violet: #8B6CFF;
+            --violet-solid: #7C5CFC;
+            --cyan: #22D3EE;
+            --amber: #FBBF24;
+            --green: #34D399;
+            --red: #FB7185;
+            --text: #F3F1FF;
+            --text-soft: #B8B4D6;
+            --glass: rgba(255,255,255,0.07);
+            --glass-strong: rgba(255,255,255,0.11);
+            --glass-border: rgba(255,255,255,0.18);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            color: var(--text);
+            background: #0E0B21;
+            background-image:
+                radial-gradient(circle at 12% 8%, rgba(124,92,252,0.5), transparent 40%),
+                radial-gradient(circle at 88% 15%, rgba(34,211,238,0.35), transparent 42%),
+                radial-gradient(circle at 50% 100%, rgba(244,114,182,0.3), transparent 45%),
+                linear-gradient(180deg, #120C2E 0%, #0E0B21 100%);
+            background-attachment: fixed;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+        h1, h2, .display {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            color: var(--text);
+        }
+        nav {
+            background: rgba(15, 11, 40, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--glass-border);
+            padding: 1.1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        nav .brand {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+            font-size: 1.3rem;
+            text-decoration: none;
+            color: #C4B5FD;
+        }
+        nav .links { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
+        nav .links a {
+            color: var(--text-soft);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.5rem 0.9rem;
+            border-radius: 8px;
+            transition: background 0.15s, color 0.15s;
+        }
+        nav .links a:hover { background: var(--glass-strong); color: var(--text); }
+        nav .links a.logout { color: #FDA4AF; }
+        .container {
+            max-width: 800px;
+            margin: 2.5rem auto;
+            padding: 0 1.5rem;
+        }
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 1.2rem;
+            padding: 0.55rem 1.1rem;
+            border: 1.5px solid var(--glass-border);
+            border-radius: 10px;
+            background: var(--glass);
+        }
+        .back-link:hover { background: var(--glass-strong); border-color: #A78BFA; }
+        .card {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 18px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+        }
+        h1 { font-size: 1.7rem; margin-bottom: 0.4rem; }
+        .subtitle { color: var(--text-soft); margin-bottom: 1.5rem; font-size: 0.95rem; }
+        label { display: block; font-weight: 600; margin-bottom: 0.4rem; margin-top: 1rem; font-size: 0.88rem; color: var(--text); }
+        input[type="text"], input[type="email"], input[type="password"], textarea {
+            width: 100%;
+            padding: 0.7rem 0.9rem;
+            border: 1.5px solid var(--glass-border);
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-family: inherit;
+            background: rgba(255,255,255,0.06);
+            color: var(--text);
+        }
+        input::placeholder, textarea::placeholder { color: var(--text-soft); }
+        input:focus, textarea:focus { outline: none; border-color: #A78BFA; box-shadow: 0 0 0 3px rgba(167,139,250,0.25); }
+        textarea { resize: vertical; min-height: 100px; }
+
+        /* File input - clearly visible on dark background */
+        input[type="file"] {
+            width: 100%;
+            padding: 0.9rem;
+            border: 2px dashed var(--glass-border);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.04);
+            font-size: 0.9rem;
+            color: var(--text-soft);
+        }
+        input[type="file"]::file-selector-button {
+            background: var(--violet-solid);
+            color: white;
+            border: none;
+            padding: 0.55rem 1.1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            margin-right: 1rem;
+        }
+        input[type="file"]::file-selector-button:hover { background: #6A45E8; }
+
+        button {
+            background: var(--violet-solid);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.7rem;
+            border-radius: 10px;
+            font-size: 0.92rem;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            margin-top: 1.5rem;
+            transition: background 0.15s, transform 0.15s;
+        }
+        button:hover { background: #6A45E8; transform: translateY(-1px); }
+        .btn-secondary { background: #D97706; }
+        .btn-secondary:hover { background: #B45309; }
+        .btn-danger {
+            background: transparent;
+            color: var(--red);
+            border: 1.5px solid rgba(251,113,133,0.5);
+            padding: 0.4rem 0.9rem;
+            font-size: 0.83rem;
+            margin: 0;
+            font-weight: 600;
+        }
+        .btn-danger:hover { background: rgba(251,113,133,0.12); }
+
+        .error-box {
+            background: rgba(251,113,133,0.12);
+            border: 1px solid rgba(251,113,133,0.35);
+            color: #FECDD3;
+            padding: 0.9rem 1.1rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+        }
+        .result-card { background: rgba(124,92,252,0.10); border-color: rgba(167,139,250,0.3); }
+        .field-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.65rem 0;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .field-row:last-child { border-bottom: none; }
+        .field-label { color: var(--text-soft); font-size: 0.9rem; }
+        .field-value { font-weight: 600; text-align: right; color: var(--text); }
+        .score-badge {
+            display: inline-block;
+            padding: 0.35rem 1rem;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 1.05rem;
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        .score-high { background: rgba(52,211,153,0.18); color: var(--green); border: 1px solid rgba(52,211,153,0.35); }
+        .score-mid { background: rgba(251,191,36,0.18); color: var(--amber); border: 1px solid rgba(251,191,36,0.35); }
+        .score-low { background: rgba(251,113,133,0.18); color: var(--red); border: 1px solid rgba(251,113,133,0.35); }
+        .skill-tag {
+            display: inline-block;
+            background: rgba(167,139,250,0.15);
+            color: #C4B5FD;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.83rem;
+            margin: 0.2rem;
+            border: 1px solid rgba(167,139,250,0.3);
+        }
+        .skill-tag.missing { background: rgba(251,113,133,0.12); color: #FECDD3; border-color: rgba(251,113,133,0.3); }
+        .items-table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+        .items-table td { padding: 0.6rem 0; border-bottom: 1px solid var(--glass-border); font-size: 0.9rem; color: var(--text); }
+        .items-table td:last-child { text-align: right; font-weight: 600; }
+        footer { text-align: center; color: var(--text-soft); font-size: 0.82rem; padding: 2.5rem 0 1.5rem; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/dashboard" class="brand">✦ Ledger</a>
+        <div class="links">
+            <a href="/dashboard">Home</a>
+            <a href="/dashboard/invoice">Receipts</a>
+            <a href="/dashboard/resume">Resumes</a>
+            <a href="/logout" class="logout">Log out</a>
+        </div>
+    </nav>
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+    <footer>Built with Flask + Google Gemini AI</footer>
+</body>
+</html>

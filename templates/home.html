@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Ledger — Home{% endblock %}
+{% block content %}
+<div class="card">
+    <h1>Welcome, {{ username }}</h1>
+    <p class="subtitle">Your AI-powered expense ledger and resume tools.</p>
+</div>
+
+<div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:1rem;">
+        <div>
+            <p style="color:#B8B4D6; font-size:0.85rem; font-weight:600; margin-bottom:0.4rem;">Total spending tracked</p>
+            <p class="display" style="font-size:2.4rem; color:#C4B5FD;">Rs {{ "%.2f"|format(total_spent) }}</p>
+        </div>
+        <a href="/dashboard/invoice"><button>Upload a receipt</button></a>
+    </div>
+    <a href="/dashboard/report" style="display:inline-block;">
+        <button class="btn-secondary">Download PDF report</button>
+    </a>
+</div>
+
+{% if chart_labels %}
+<div class="card">
+    <h1 style="font-size:1.25rem;">Spending over time</h1>
+    <canvas id="spendingChart" style="margin-top:1.2rem; max-height:280px;"></canvas>
+</div>
+{% endif %}
+
+<div class="card">
+    <h1 style="font-size:1.25rem;">Resume screening</h1>
+    <p class="subtitle">Upload a resume and, optionally, a job description to get candidate details and an AI match score.</p>
+    <a href="/dashboard/resume"><button>Screen a resume</button></a>
+</div>
+
+<div class="card">
+    <h1 style="font-size:1.25rem;">Receipt history</h1>
+    {% if receipts %}
+    <table class="items-table" style="margin-top:1rem;">
+        <thead>
+            <tr style="text-align:left; color:#B8B4D6; font-size:0.83rem;">
+                <th style="padding-bottom:0.5rem; font-weight:600;">Vendor</th>
+                <th style="padding-bottom:0.5rem; font-weight:600;">Date</th>
+                <th style="padding-bottom:0.5rem; text-align:right; font-weight:600;">Total</th>
+                <th style="padding-bottom:0.5rem; text-align:right; font-weight:600;">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for r in receipts %}
+            <tr>
+                <td>{{ r.vendor or "—" }}</td>
+                <td>{{ r.receipt_date or "—" }}</td>
+                <td style="text-align:right; font-weight:600;">{{ r.currency or "" }} {{ r.total or "—" }}</td>
+                <td style="text-align:right;">
+                    <form method="POST" action="/dashboard/delete-receipt/{{ r.id }}" onsubmit="return confirm('Delete this receipt?');" style="display:inline;">
+                        <button type="submit" class="btn-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="subtitle" style="margin-top:1rem;">No receipts yet. <a href="/dashboard/invoice" style="color:#C4B5FD; font-weight:600;">Upload your first one →</a></p>
+    {% endif %}
+</div>
+
+{% if chart_labels %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+    const ctx = document.getElementById('spendingChart').getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 260);
+    gradient.addColorStop(0, '#8B6CFF');
+    gradient.addColorStop(1, '#22D3EE');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: {{ chart_labels | tojson }},
+            datasets: [{
+                label: 'Spending per day (PKR)',
+                data: {{ chart_values | tojson }},
+                backgroundColor: gradient,
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.08)' }, ticks: { color: '#B8B4D6' } },
+                x: { grid: { display: false }, ticks: { color: '#B8B4D6' } }
+            }
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}
