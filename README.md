@@ -1,46 +1,47 @@
-# AI Document Extractor — Invoice & Resume Automation
+# Ledger — AI Expense & Resume Tracker
 
-Two AI-powered automation tools that extract structured data from unstructured documents (images, PDFs, and Word files) using Google Gemini's multimodal AI, wrapped in a Flask REST API and connected to no-code automation (Make.com) for real-world, hands-off workflows.
+A full-stack web application that uses Google Gemini's multimodal AI to extract structured data from invoices/receipts and resumes — with user accounts, a personal spending dashboard, currency conversion, and PDF report export.
 
-**Live API:** `https://rabia.pythonanywhere.com`
+**Live app:** `https://rabia.pythonanywhere.com`
 
 ---
 
 ## The Problem
 
-Manually copying data from invoices, receipts, and resumes into spreadsheets is slow, repetitive, and error-prone. Small businesses processing dozens of receipts a month — or recruiters screening hundreds of resumes — waste hours on data entry that could be automated.
+Manually copying data from invoices, receipts, and resumes into spreadsheets is slow, repetitive, and error-prone. People tracking personal expenses across multiple currencies, or recruiters screening resumes against job descriptions, waste hours on data entry that could be automated.
 
 ## The Solution
 
-Two connected tools built on the same core architecture:
+A single web app with user accounts where anyone can:
 
-### 1. Invoice / Receipt Extractor
-Drop a photo or PDF of a receipt into a Google Drive folder. The system automatically:
-- Reads the image using Gemini's vision capabilities (no separate OCR step required)
+### 📄 Track expenses with AI
+- Upload a photo or PDF of a receipt — Gemini reads it directly (no separate OCR step)
 - Extracts vendor, date, total, and itemized line items as structured JSON
-- Correctly distinguishes `TOTAL` from `SUBTOTAL` even when discounts are applied
-- Writes the result to a Google Sheet — fully automated, no manual entry
+- Automatically converts any currency to PKR (live exchange rate, with an offline fallback)
+- Every receipt is saved to a personal, per-user history with a spending-over-time chart
+- Download a formatted PDF expense report at any time
 
-### 2. Resume / CV Bulk Extractor
-Candidates submit resumes via a Google Form. The system automatically:
-- Extracts name, contact info, skills, work experience, and education from PDF/DOCX files
-- Compares the candidate against a job description using AI
-- Produces a 0–100 match score with matched/missing skills and a plain-English summary
-- Logs everything to a candidate database in Google Sheets
+### 🧑‍💼 Screen resumes with AI
+- Upload a resume (PDF/DOCX) — extracts name, contact info, skills, experience, education
+- Optionally paste a job description to get a 0–100 AI match score with matched/missing skills
+- Every screening is saved to a personal resume history
 
 ---
 
-## How It Works
+## Architecture
 
 ```
-Invoice pipeline:
-Google Drive (new file) → Make.com → Flask API → Gemini AI → Google Sheets
-
-Resume pipeline:
-Google Form (submission) → Make.com → Flask API → Gemini AI → Google Sheets
+Browser (login-protected dashboard)
+        │
+        ▼
+   Flask backend ──► Google Gemini API (multimodal extraction + matching)
+        │
+        ├──► SQLite (users, receipts, resumes — per-user isolated)
+        ├──► Currency API (live rate, with a hardcoded fallback for restricted hosting)
+        └──► ReportLab (PDF report generation)
 ```
 
-Both tools share one Flask backend with two endpoints (`/extract-invoice` and `/extract-resume`), deployed on PythonAnywhere and orchestrated by Make.com scenarios that handle file transport, error routing, and spreadsheet writes.
+A second, fully independent automation pipeline (Make.com) also exists for hands-off batch processing: dropping files into Google Drive / a Google Form automatically routes them through the same Flask API into Google Sheets.
 
 ---
 
@@ -50,104 +51,58 @@ Both tools share one Flask backend with two endpoints (`/extract-invoice` and `/
 |---|---|
 | AI / extraction | Google Gemini API (multimodal — reads images directly) |
 | Backend | Python, Flask, Gunicorn |
+| Auth & sessions | Flask sessions, werkzeug password hashing |
+| Database | SQLite |
 | File parsing | PyPDF2, python-docx |
+| PDF generation | ReportLab |
+| Charts | Chart.js |
+| Currency data | Live FX API with a static fallback table |
 | Hosting | PythonAnywhere |
-| Automation | Make.com (Google Drive / Forms / Sheets integration) |
-| Version control | Git, GitHub |
+| Automation (optional pipeline) | Make.com (Google Drive / Forms / Sheets) |
 
 ---
 
 ## Key Engineering Decisions
 
-- **No OCR step.** Early versions used Tesseract OCR before sending text to the AI. Switching to Gemini's native image understanding removed a fragile system dependency, simplified deployment (no Docker/system packages needed), and *improved* accuracy — OCR was misreading numbers in tight-column receipt layouts.
-- **Retry logic with model fallback.** API calls automatically retry with exponential backoff and fall back to a secondary model if the primary is temporarily overloaded, so transient upstream issues don't break the pipeline.
-- **Prompt-level correctness rules.** The extraction prompt explicitly instructs the model to distinguish `TOTAL` from `SUBTOTAL`/`CASH`/`CHANGE` — a bug found and fixed during testing where the model initially picked the pre-discount subtotal.
-- **Batch support.** The resume endpoint accepts multiple files in a single request for bulk processing.
+- **No OCR step.** Early versions used Tesseract OCR before sending text to the AI. Switching to Gemini's native image understanding removed a fragile system dependency, simplified deployment, and *improved* accuracy — OCR was misreading numbers in tight-column receipt layouts.
+- **Retry logic with model fallback.** API calls automatically retry with exponential backoff and fall back to a secondary model if the primary is overloaded.
+- **Network-restricted hosting handled gracefully.** The free hosting tier only allows outbound requests to a domain whitelist. The currency converter detects when the live FX API is unreachable and falls back to a static rate table instead of silently failing — spending totals never show as zero due to a blocked network call.
+- **Per-user data isolation.** All receipts and resumes are scoped to the logged-in user's session; delete operations verify ownership before executing.
+- **Robust date handling.** Receipt dates arrive in inconsistent formats (`10/07/2020`, `04 Dec 2024`, etc.). Dates are parsed into a normalized ISO format at save time purely for chronological sorting, while the original format is preserved for display.
+- **Prompt-level correctness rules.** The extraction prompt explicitly instructs the model to distinguish `TOTAL` from `SUBTOTAL`/`CASH`/`CHANGE` — a bug found and fixed during testing.
 
 ---
 
 ## Accuracy Results
 
-Tested against 7 real samples with known ground truth (4 invoices, 3 resumes across logistics, marketing, and engineering roles):
+Tested against 7 real samples with known ground truth (4 invoices, 3 resumes across logistics, marketing, and engineering roles): **100% field-level extraction accuracy.**
 
-**100% field-level extraction accuracy** across vendor/name, date, totals, line items, contact info, skills, experience, and education fields.
-
-Match-scoring was validated against two different job descriptions for the same resume — correctly returning a 0/100 score for an unrelated role and 88–95/100 for a matching role, confirming the scoring logic responds to actual content rather than returning generic values.
+Match-scoring was validated against two different job descriptions for the same resume — correctly returning 0/100 for an unrelated role and 88–95/100 for a matching role.
 
 Full test log: [`accuracy_testing_log.md`](./accuracy_testing_log.md)
-
----
-
-## API Reference
-
-### `POST /extract-invoice`
-| Field | Type | Description |
-|---|---|---|
-| `file` | file (jpg/png/pdf) | Invoice or receipt to process |
-
-**Response:**
-```json
-{
-  "success": true,
-  "filename": "receipt.jpg",
-  "data": {
-    "vendor": "Happy Mart",
-    "date": "10/07/2020",
-    "total": 8.18,
-    "currency": "$",
-    "items": [{"name": "PEANUTS", "price": 2.46}],
-    "items_summary": "PEANUTS ($2.46), TOMATOES ($4.98)"
-  }
-}
-```
-
-### `POST /extract-resume`
-| Field | Type | Description |
-|---|---|---|
-| `files` | file(s) (pdf/docx) | One or more resumes |
-| `job_description` | text (optional) | If provided, returns a match score |
-
-**Response:**
-```json
-{
-  "success": true,
-  "total_processed": 1,
-  "results": [{
-    "filename": "resume.pdf",
-    "success": true,
-    "data": {
-      "resume_data": { "name": "...", "skills": ["..."], "experience": ["..."] },
-      "match_result": { "match_score": 88, "matched_skills": ["..."], "summary": "..." }
-    }
-  }]
-}
-```
 
 ---
 
 ## Running Locally
 
 ```bash
-git clone https://github.com/khalidrabia671-cloud/ai-invoice-extractor.git
-cd ai-invoice-extractor
+git clone https://github.com/khalidrabia671-cloud/ai-ledger-expense-resume-tracker.git
+cd ai-ledger-expense-resume-tracker
 python -m venv venv
 venv\Scripts\activate        # Windows
 pip install -r requirements.txt
 
-# Add your Gemini API key
+# Add your Gemini API key and a session secret
 echo GEMINI_API_KEY=your_key_here > .env
+echo FLASK_SECRET_KEY=any_random_string >> .env
 
 python app.py
 ```
 
+Then visit `http://127.0.0.1:5000/signup` to create an account.
+
 Get a free Gemini API key at [aistudio.google.com](https://aistudio.google.com/apikey).
-
----
-
-## Project Status
-
-Both automation pipelines are built and tested end-to-end. Scheduling is currently manual (Make.com free tier operation limits) — see [Make.com pricing](https://www.make.com/en/pricing) for always-on scheduling options.
 
 ## Author
 
-Built as a portfolio project demonstrating AI API integration, REST API design, error handling, and no-code automation orchestration.
+Built as a portfolio project demonstrating full-stack development: authentication, database design, AI API integration, third-party API resilience (fallback handling), PDF generation, and no-code automation orchestration.
